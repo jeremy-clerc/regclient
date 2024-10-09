@@ -626,6 +626,9 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 	}
 	// process entries in an index
 	if mSrcIndex, ok := mSrc.(manifest.Indexer); ok && mSrc.IsSet() && !ref.EqualRepository(refSrc, refTgt) {
+		// to only keep manifests list of specifically included platforms in multi platform manifest.
+		pfManifests := make([]descriptor.Descriptor, 0, len(opt.platforms))
+
 		// manifest lists need to recursively copy nested images by digest
 		dList, err := mSrcIndex.GetManifestList()
 		if err != nil {
@@ -644,6 +647,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					}).Debug("Platform excluded from copy")
 					continue
 				}
+				pfManifests = append(pfManifests, dEntry)
 			}
 			dEntry := dEntry
 			waitCount++
@@ -677,6 +681,11 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 				}
 				waitCh <- err
 			}()
+		}
+		if len(pfManifests) > 0 {
+			if err := mSrcIndex.SetManifestList(pfManifests); err != nil {
+				return err
+			}
 		}
 	}
 
